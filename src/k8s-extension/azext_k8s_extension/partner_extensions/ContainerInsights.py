@@ -680,7 +680,7 @@ def _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_
 
     # ingestion DCE MUST be in workspace region
     ingestionDataCollectionEndpointName = f"MSCI-ingest-{workspace_region}-{cluster_name}"
-    # Max length of the DCE name is 44 chars
+    # Max length of the DCE name is 43 chars
     ingestionDataCollectionEndpointName = _trim_suffix_if_needed(ingestionDataCollectionEndpointName[0:43])
     ingestion_dce_resource_id = None
 
@@ -816,15 +816,15 @@ def create_data_collection_endpoint(cmd, subscription_id, cluster_resource_group
             }
         }
     })
+    error = None
     for _ in range(3):
         try:
             send_raw_request(cmd.cli_ctx, "PUT", ingestion_dce_url, body=ingestion_dce_creation_body)
-            error = None
-            break
+            return ingestion_dce_resource_id
         except AzCLIError as e:
             error = e
-        else:
-            raise error
+    if error:
+        raise error
     return ingestion_dce_resource_id
 
 
