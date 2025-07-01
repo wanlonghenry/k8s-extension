@@ -48,6 +48,7 @@ ContainerInsightsStreams = [
     "Microsoft-Perf",
 ]
 
+
 class ContainerInsights(DefaultExtension):
     def Create(self, cmd, client, resource_group_name, cluster_name, name, cluster_type, cluster_rp,
                extension_type, scope, auto_upgrade_minor_version, release_train, version, target_namespace,
@@ -800,6 +801,7 @@ def _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_
         else:
             raise error
 
+
 def create_data_collection_endpoint(cmd, subscription_id, cluster_resource_group_name, workspace_region, ingestionDataCollectionEndpointName):
     # create the ingestion DCE
     ingestion_dce_resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{cluster_resource_group_name}/providers/Microsoft.Insights/dataCollectionEndpoints/{ingestionDataCollectionEndpointName}"
@@ -823,6 +825,7 @@ def create_data_collection_endpoint(cmd, subscription_id, cluster_resource_group
         else:
             raise error
     return ingestion_dce_resource_id
+
 
 def _trim_suffix_if_needed(s, suffix="-"):
     if s.endswith(suffix):
