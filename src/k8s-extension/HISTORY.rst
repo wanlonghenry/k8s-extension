@@ -5,7 +5,7 @@ Release History
 
 1.6.6
 ++++++++
-* microsoft.azuremonitor.containers: Extend ContainerInsights Extension for high log scale mode and amplify support.
+* microsoft.azuremonitor.containers: Extend ContainerInsights Extension for high log scale mode support.
 
 1.6.5
 ++++++++++++++++++
