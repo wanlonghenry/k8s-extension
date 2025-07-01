@@ -33,6 +33,20 @@ from .._client_factory import (
 logger = get_logger(__name__)
 DCR_API_VERSION = "2022-06-01"
 
+ContainerInsightsStreams = [
+    "Microsoft-ContainerLog",
+    "Microsoft-ContainerLogV2-HighScale",
+    "Microsoft-KubeEvents",
+    "Microsoft-KubePodInventory",
+    "Microsoft-KubeNodeInventory",
+    "Microsoft-KubePVInventory",
+    "Microsoft-KubeServices",
+    "Microsoft-KubeMonAgentEvents",
+    "Microsoft-InsightsMetrics",
+    "Microsoft-ContainerInventory",
+    "Microsoft-ContainerNodeInventory",
+    "Microsoft-Perf",
+]
 
 class ContainerInsights(DefaultExtension):
     def Create(self, cmd, client, resource_group_name, cluster_name, name, cluster_type, cluster_rp,
@@ -523,10 +537,12 @@ def _get_container_insights_settings(cmd, cluster_resource_group_name, cluster_r
         if useAADAuth and 'amalogs.enableHighLogScaleMode' in configuration_settings:
             enableHighLogScaleMode = configuration_settings['amalogs.enableHighLogScaleMode']
             if isinstance(enableHighLogScaleMode, str):
-                enableHighLogScaleMode = enableHighLogScaleMode.lower()
-            if enableHighLogScaleMode not in ["true", "false"]:
+                enableHighLogScaleMode_str = enableHighLogScaleMode.lower()
+                if enableHighLogScaleMode_str not in ["true", "false"]:
+                    raise InvalidArgumentValueError('amalogs.enableHighLogScaleMode value MUST be either true or false')
+                enableHighLogScaleMode = (enableHighLogScaleMode_str == "true")
+            elif not isinstance(enableHighLogScaleMode, bool):
                 raise InvalidArgumentValueError('amalogs.enableHighLogScaleMode value MUST be either true or false')
-            extensionSettings["enableHighLogScaleMode"] = enableHighLogScaleMode
 
     workspace_resource_id = workspace_resource_id.strip()
 
@@ -697,6 +713,8 @@ def _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_
     # get existing tags on the container insights extension DCR if the customer added any
     existing_tags = get_existing_container_insights_extension_dcr_tags(cmd, dcr_url)
     streams = ["Microsoft-ContainerInsights-Group-Default"]
+    if enable_high_log_scale_mode:
+        streams = ContainerInsightsStreams
     if extensionSettings is None:
         extensionSettings = {}
     if 'dataCollectionSettings' in extensionSettings.keys():
