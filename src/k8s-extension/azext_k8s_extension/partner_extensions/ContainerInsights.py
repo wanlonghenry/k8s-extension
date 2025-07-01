@@ -520,6 +520,14 @@ def _get_container_insights_settings(cmd, cluster_resource_group_name, cluster_r
                     raise InvalidArgumentValueError('streams must be an array type')
             extensionSettings["dataCollectionSettings"] = dataCollectionSettings
 
+        if useAADAuth and 'amalogs.enableHighLogScaleMode' in configuration_settings:
+            enableHighLogScaleMode = configuration_settings['amalogs.enableHighLogScaleMode']
+            if isinstance(enableHighLogScaleMode, str):
+                enableHighLogScaleMode = enableHighLogScaleMode.lower()
+            if enableHighLogScaleMode not in ["true", "false"]:
+                raise InvalidArgumentValueError('amalogs.enableHighLogScaleMode value MUST be either true or false')
+            extensionSettings["enableHighLogScaleMode"] = enableHighLogScaleMode
+
     workspace_resource_id = workspace_resource_id.strip()
 
     if configuration_protected_settings is not None:
@@ -548,7 +556,7 @@ def _get_container_insights_settings(cmd, cluster_resource_group_name, cluster_r
     if is_ci_extension_type:
         if useAADAuth:
             logger.info("creating data collection rule and association")
-            _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_resource_group_name, cluster_rp, cluster_type, cluster_name, workspace_resource_id, extensionSettings)
+            _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_resource_group_name, cluster_rp, cluster_type, cluster_name, workspace_resource_id, extensionSettings, enableHighLogScaleMode)
         elif not _is_container_insights_solution_exists(cmd, workspace_resource_id):
             logger.info("Creating ContainerInsights solution resource, since it doesn't exist and it is using legacy authentication")
             _ensure_container_insights_for_monitoring(cmd, workspace_resource_id).result()
@@ -617,7 +625,7 @@ def get_existing_container_insights_extension_dcr_tags(cmd, dcr_url):
     return tags
 
 
-def _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_resource_group_name, cluster_rp, cluster_type, cluster_name, workspace_resource_id, extensionSettings):
+def _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_resource_group_name, cluster_rp, cluster_type, cluster_name, workspace_resource_id, extensionSettings, enable_high_log_scale_mode):
     from azure.core.exceptions import HttpResponseError
 
     cluster_region = ''
@@ -651,6 +659,18 @@ def _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_
     # Max length of the DCR name is 64 chars
     dataCollectionRuleName = dataCollectionRuleName[0:64]
     dcr_resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{cluster_resource_group_name}/providers/Microsoft.Insights/dataCollectionRules/{dataCollectionRuleName}"
+
+    # ingestion DCE MUST be in workspace region
+    ingestionDataCollectionEndpointName = f"MSCI-ingest-{workspace_region}-{cluster_name}"
+    # Max length of the DCE name is 44 chars
+    ingestionDataCollectionEndpointName = _trim_suffix_if_needed(ingestionDataCollectionEndpointName[0:43])
+    ingestion_dce_resource_id = None
+
+    # create ingestion DCE if high log scale mode enabled
+    if enable_high_log_scale_mode:
+        ingestion_dce_resource_id = create_data_collection_endpoint(
+            cmd, subscription_id, cluster_resource_group_name, workspace_region, ingestionDataCollectionEndpointName
+        )
 
     # first get the association between region display names and region IDs (because for some reason
     # the "which RPs are available in which regions" check returns region display names)
@@ -691,6 +711,11 @@ def _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_
         }
     extensionSettings["dataCollectionSettings"] = dataCollectionSettings
 
+    if enable_high_log_scale_mode:
+        for i, v in enumerate(streams):
+            if v == "Microsoft-ContainerLogV2":
+                streams[i] = "Microsoft-ContainerLogV2-HighScale"
+
     # create the DCR
     dcr_creation_body = json.dumps(
         {
@@ -722,6 +747,7 @@ def _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_
                         }
                     ]
                 },
+                "dataCollectionEndpointId": ingestion_dce_resource_id
             },
         }
     )
@@ -755,3 +781,32 @@ def _ensure_container_insights_dcr_for_monitoring(cmd, subscription_id, cluster_
             error = e
         else:
             raise error
+
+def create_data_collection_endpoint(cmd, subscription_id, cluster_resource_group_name, workspace_region, ingestionDataCollectionEndpointName):
+    # create the ingestion DCE
+    ingestion_dce_resource_id = f"/subscriptions/{subscription_id}/resourceGroups/{cluster_resource_group_name}/providers/Microsoft.Insights/dataCollectionEndpoints/{ingestionDataCollectionEndpointName}"
+    ingestion_dce_url = cmd.cli_ctx.cloud.endpoints.resource_manager + f"{ingestion_dce_resource_id}?api-version=2022-06-01"
+    ingestion_dce_creation_body = json.dumps({
+        "location": workspace_region,
+        "kind": "Linux",
+        "properties": {
+            "networkAcls": {
+                "publicNetworkAccess": "Enabled"
+            }
+        }
+    })
+    for _ in range(3):
+        try:
+            send_raw_request(cmd.cli_ctx, "PUT", ingestion_dce_url, body=ingestion_dce_creation_body)
+            error = None
+            break
+        except AzCLIError as e:
+            error = e
+        else:
+            raise error
+    return ingestion_dce_resource_id
+
+def _trim_suffix_if_needed(s, suffix="-"):
+    if s.endswith(suffix):
+        s = s[:-len(suffix)]
+    return s
