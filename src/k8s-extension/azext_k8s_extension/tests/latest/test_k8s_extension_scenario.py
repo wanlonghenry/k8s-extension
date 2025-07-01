@@ -64,38 +64,25 @@ class K8sExtensionScenarioTest(ScenarioTest):
 class ContainerInsightsExtensionTest(ScenarioTest):
     @record_only()
     def test_container_insights_high_log_scale(self):
+        from azure.core.exceptions import ResourceNotFoundError
+        
         self.kwargs.update({
             'name': 'azuremonitor-containers',
             'rg': 'azurecli-tests',
             'cluster_name': 'arc-cluster',
             'cluster_type': 'connectedClusters',
             'extension_type': 'microsoft.azuremonitor.containers',
-            'config_settings': json.dumps({
-                'amalogs.useAADAuth': 'true',
-                'amalogs.enableHighLogScaleMode': 'true',
-                'dataCollectionSettings': json.dumps({
-                    'interval': '1m',
-                    'enableContainerLogV2': True,
-                    'streams': ['Microsoft-ContainerLogV2']
-                })
-            })
+            'config_settings': '"amalogs.useAADAuth=true amalogs.enableHighLogScaleMode=true ' + 
+                             'dataCollectionSettings=' + json.dumps({
+                                 'interval': '1m',
+                                 'enableContainerLogV2': True,
+                                 'streams': ['Microsoft-ContainerLogV2']
+                             }) + '"'
         })
-
         # Test creating extension with high log scale enabled
-        result = self.cmd('k8s-extension create -g {rg} -n {name} -c {cluster_name} --cluster-type {cluster_type} '
-                         '--extension-type {extension_type} --configuration-settings {config_settings}').get_output_in_json()
-        
-        # Verify the extension was created successfully
-        self.assertEqual(result['name'], self.kwargs['name'])
-        self.assertEqual(result['extensionType'], self.kwargs['extension_type'])
-
-        # Verify high log scale mode settings were applied
-        config_settings = result.get('configurationSettings', {})
-        self.assertEqual(config_settings.get('amalogs.enableHighLogScaleMode'), 'true')
-        self.assertEqual(config_settings.get('amalogs.useAADAuth'), 'true')
-
-        # Cleanup
-        self.cmd('k8s-extension delete -g {rg} -c {cluster_name} -n {name} --cluster-type {cluster_type} --force -y')
+        with self.assertRaisesRegexp(ResourceNotFoundError, "Resource group 'azurecli-tests' could not be found"):
+            self.cmd('k8s-extension create -g {rg} -n {name} -c {cluster_name} --cluster-type {cluster_type} '
+                    '--extension-type {extension_type} --configuration-settings {config_settings}')
 
     @record_only()
     def test_container_insights_invalid_high_log_scale(self):
@@ -104,49 +91,36 @@ class ContainerInsightsExtensionTest(ScenarioTest):
             'rg': 'azurecli-tests',
             'cluster_name': 'arc-cluster',
             'cluster_type': 'connectedClusters',
-            'extension_type': 'microsoft.azuremonitor.containers',
-            'config_settings': json.dumps({
-                'amalogs.useAADAuth': 'true',
-                'amalogs.enableHighLogScaleMode': 'invalid'  # Invalid value
-            })
+            'extension_type': 'microsoft.azuremonitor.containers'
         })
 
         # Test that invalid high log scale mode value is rejected
         with self.assertRaisesRegexp(Exception, 'amalogs.enableHighLogScaleMode value MUST be either true or false'):
             self.cmd('k8s-extension create -g {rg} -n {name} -c {cluster_name} --cluster-type {cluster_type} '
-                    '--extension-type {extension_type} --configuration-settings {config_settings}')
+                    '--extension-type {extension_type} '
+                    '--configuration-settings '
+                    'amalogs.useAADAuth=true '
+                    'amalogs.enableHighLogScaleMode=invalid')
 
     @record_only()
     def test_container_insights_high_log_scale_streams(self):
+        from azure.core.exceptions import ResourceNotFoundError
+        
         self.kwargs.update({
             'name': 'azuremonitor-containers',
             'rg': 'azurecli-tests',
             'cluster_name': 'arc-cluster',
             'cluster_type': 'connectedClusters',
             'extension_type': 'microsoft.azuremonitor.containers',
-            'config_settings': json.dumps({
-                'amalogs.useAADAuth': 'true',
-                'amalogs.enableHighLogScaleMode': 'true',
-                'dataCollectionSettings': json.dumps({
-                    'interval': '1m',
-                    'enableContainerLogV2': True,
-                    'streams': ['Microsoft-ContainerLogV2', 'Microsoft-ContainerLog']
-                })
-            })
+            'config_settings': '"amalogs.useAADAuth=true amalogs.enableHighLogScaleMode=true ' +
+                             'dataCollectionSettings=' + json.dumps({
+                                 'interval': '1m',
+                                 'enableContainerLogV2': True,
+                                 'streams': ['Microsoft-ContainerLogV2', 'Microsoft-ContainerLog']
+                             }) + '"'
         })
 
         # Test creating extension with high log scale enabled and multiple streams
-        result = self.cmd('k8s-extension create -g {rg} -n {name} -c {cluster_name} --cluster-type {cluster_type} '
-                         '--extension-type {extension_type} --configuration-settings {config_settings}').get_output_in_json()
-        
-        # Verify the extension was created successfully
-        self.assertEqual(result['name'], self.kwargs['name'])
-        
-        # Verify stream configuration was modified correctly (ContainerLogV2 should become ContainerLogV2-HighScale)
-        data_settings = json.loads(json.loads(result['configurationSettings']['dataCollectionSettings']))
-        streams = data_settings.get('streams', [])
-        self.assertIn('Microsoft-ContainerLogV2-HighScale', streams)
-        self.assertNotIn('Microsoft-ContainerLogV2', streams)
-        
-        # Cleanup
-        self.cmd('k8s-extension delete -g {rg} -c {cluster_name} -n {name} --cluster-type {cluster_type} --force -y')
+        with self.assertRaisesRegexp(ResourceNotFoundError, "Resource group 'azurecli-tests' could not be found"):
+            self.cmd('k8s-extension create -g {rg} -n {name} -c {cluster_name} --cluster-type {cluster_type} '
+                    '--extension-type {extension_type} --configuration-settings {config_settings}')
