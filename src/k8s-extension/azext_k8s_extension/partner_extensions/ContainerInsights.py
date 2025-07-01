@@ -816,17 +816,16 @@ def create_data_collection_endpoint(cmd, subscription_id, cluster_resource_group
             }
         }
     })
-    last_error = None
     for _ in range(3):
         try:
-            response = send_raw_request(cmd.cli_ctx, "PUT", ingestion_dce_url, body=ingestion_dce_creation_body)
-            return ingestion_dce_resource_id
+            send_raw_request(cmd.cli_ctx, "PUT", ingestion_dce_url, body=ingestion_dce_creation_body)
+            error = None
+            break
         except AzCLIError as e:
-            last_error = e
-            continue
-    
-    # If we get here, all retries failed
-    raise CLIError(f"Failed to create data collection endpoint after 3 retries. Last error: {str(last_error)}")
+            error = e
+        else:
+            raise error
+    return ingestion_dce_resource_id
 
 
 def _trim_suffix_if_needed(s, suffix="-"):
